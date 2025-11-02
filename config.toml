@@ -1,0 +1,27 @@
+# PHOEBE Server Configuration (TOML)
+
+[server]
+host = "0.0.0.0"
+port = 8001
+workers = 4
+
+[auth]
+enabled = false
+
+[port_pool]
+start = 6560
+end = 6590
+
+[logging]
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+[session]
+idle_timeout_seconds = 1800 # 30 minutes
+
+[database]
+path = "data/sessions.db"
+# Commands to exclude from logging (comma-separated)
+log_exclude_commands = "ping"
+# Commands to include (if empty, logs all except excluded)
+log_include_commands = ""

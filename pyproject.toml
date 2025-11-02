@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phoebe-server"
+version = "0.1.0"
+description = "PHOEBE computation server and session management"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Andrej Prša", email = "andrej.prsa@villanova.edu"}
+]
+keywords = ["phoebe", "astronomy", "binary stars", "server"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pyzmq>=25.0.0",
+    "psutil>=5.9.0",
+    "phoebe>=2.4.0",
+    "pydantic>=2.0.0",
+    "tomli>=2.0.0",
+    "numpy>=1.20.0",
+]
+
+[project.optional-dependencies]
+jwt = [
+    "pyjwt>=2.8.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+    "httpx>=0.24.0",
+]
+all = [
+    "phoebe-server[jwt,dev]",
+]
+
+[project.scripts]
+phoebe-server = "phoebe_server.cli:main"
+
+[project.urls]
+Homepage = "https://phoebe-project.org"
+Repository = "https://github.com/phoebe-project/phoebe-server"
+
+[tool.setuptools]
+packages = [
+    "phoebe_server",
+    "phoebe_server.api",
+    "phoebe_server.manager",
+    "phoebe_server.worker",
+    "phoebe_server.auth",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
