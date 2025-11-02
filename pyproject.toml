@@ -7,7 +7,7 @@ name = "phoebe-server"
 version = "0.1.0"
 description = "PHOEBE computation server and session management"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = {text = "GPL-3.0-or-later"}
 authors = [
     {name = "Andrej Prša", email = "andrej.prsa@villanova.edu"}
@@ -18,9 +18,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
@@ -32,7 +29,6 @@ dependencies = [
     "psutil>=5.9.0",
     "phoebe>=2.4.0",
     "pydantic>=2.0.0",
-    "tomli>=2.0.0",
     "numpy>=1.20.0",
 ]
 
@@ -70,7 +66,7 @@ packages = [
 
 [tool.black]
 line-length = 100
-target-version = ['py39']
+target-version = ['py312']
 
 [tool.pytest.ini_options]
 minversion = "7.0"

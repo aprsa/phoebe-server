@@ -7,6 +7,7 @@ workers = 4
 
 [auth]
 enabled = false
+api_keys = []  # Generate with: phoebe-server generate-key
 
 [port_pool]
 start = 6560

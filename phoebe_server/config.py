@@ -2,13 +2,14 @@
 
 
 from pathlib import Path
-import tomli
+import tomllib
 from pydantic import BaseModel
 
 
 class AuthConfig(BaseModel):
     # defaults when config.toml is missing
     enabled: bool = False
+    api_keys: list[str] = []
 
 
 class ServerConfig(BaseModel):
@@ -58,7 +59,7 @@ def load_config(config_path: str = "config.toml") -> Config:
     if not config_file.exists():
         return Config()
     with open(config_file, "rb") as f:
-        data = tomli.load(f)
+        data = tomllib.load(f)
     # Flatten nested dicts for pydantic
     return Config(**data)
 

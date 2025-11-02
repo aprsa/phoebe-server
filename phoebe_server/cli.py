@@ -4,6 +4,7 @@ import argparse
 import uvicorn
 from .config import config
 from . import database
+from .auth import generate_api_key
 
 
 def main():
@@ -21,6 +22,10 @@ def main():
     # Init database command
     init_db_parser = subparsers.add_parser("init-db", help="Initialize the database")
     init_db_parser.add_argument("--force", action="store_true", help="Reinitialize even if database exists")
+
+    # Generate API key command
+    key_parser = subparsers.add_parser("generate-key", help="Generate a new API key")
+    key_parser.add_argument("--prefix", default="phoebe", help="Key prefix (default: phoebe)")
 
     args = parser.parse_args()
 
@@ -42,6 +47,9 @@ def main():
 
         database.init_database()
         print(f"Database initialized at {db_path}")
+    elif args.command == "generate-key":
+        key = generate_api_key(prefix=args.prefix)
+        print(f"{key}\n")
     else:
         parser.print_help()
 

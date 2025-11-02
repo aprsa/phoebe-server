@@ -1,15 +1,16 @@
 """Command execution endpoints."""
 
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from ..manager import session_manager
 from ..worker.proxy import send_command
 from .. import database
+from ..auth import verify_api_key
 
 router = APIRouter()
 
 
-@router.post('/send/{client_id}')
+@router.post('/send/{client_id}', dependencies=[Depends(verify_api_key)])
 async def send(client_id: str, command: dict):
     """Send a command to a PHOEBE session."""
     info = session_manager.get_server_info(client_id)

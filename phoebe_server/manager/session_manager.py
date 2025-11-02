@@ -6,14 +6,13 @@ import time
 import psutil
 import logging
 import zmq
-from typing import Dict, Optional, List
 from ..config import config
 from .. import database
 
 logger = logging.getLogger(__name__)
 
-server_registry: Dict[str, Dict] = {}
-available_ports: List[int] = []
+server_registry: dict[str, dict] = {}
+available_ports: list[int] = []
 reserved_ports: set = set()
 
 
@@ -68,7 +67,7 @@ def _wait_for_worker_ready(port: int, timeout: float = 30.0) -> bool:
     return False
 
 
-def launch_phoebe_server(client_ip: Optional[str] = None, user_agent: Optional[str] = None) -> Dict:
+def launch_phoebe_server(client_ip: str | None = None, user_agent: str | None = None) -> dict:
     """Launch a new PHOEBE worker instance."""
     client_id = str(uuid.uuid4())
     port = request_port()
@@ -128,7 +127,7 @@ def update_last_activity(client_id: str):
         database.log_session_activity(client_id, current_time)
 
 
-def get_current_memory_usage(client_id: str) -> Optional[float]:
+def get_current_memory_usage(client_id: str) -> float | None:
     """Get current memory usage of a worker process."""
     info = server_registry.get(client_id)
     if info and info.get('process'):
@@ -146,7 +145,7 @@ def get_current_memory_usage(client_id: str) -> Optional[float]:
     return None
 
 
-def get_server_info(client_id: str) -> Optional[Dict]:
+def get_server_info(client_id: str) -> dict | None:
     """Get information about a session."""
     info = server_registry.get(client_id)
     if not info:
@@ -209,7 +208,7 @@ def shutdown_server(client_id: str, termination_reason: str = "manual") -> bool:
     return True
 
 
-def list_sessions() -> Dict:
+def list_sessions() -> dict:
     """List all active sessions."""
     # Clean up dead processes
     dead_clients = []
@@ -243,7 +242,7 @@ def cleanup_idle_sessions():
     return len(idle_clients)
 
 
-def get_port_status() -> Dict:
+def get_port_status() -> dict:
     """Get port pool status."""
     total_ports = len(available_ports) + len(reserved_ports)
     port_min = config.port_pool.start

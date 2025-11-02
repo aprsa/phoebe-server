@@ -1,14 +1,13 @@
 import sqlite3
 import logging
 from pathlib import Path
-from typing import Optional
 from contextlib import contextmanager
 from .config import config
 
 logger = logging.getLogger(__name__)
 
 # Global database path
-_db_path: Optional[Path] = None
+_db_path: Path | None = None
 
 
 def init_database():
@@ -122,7 +121,7 @@ def should_log_command(command_name: str) -> bool:
     return command_name not in exclude
 
 
-def log_session_created(session_id: str, created_at: float, port: int, client_ip: Optional[str] = None, user_agent: Optional[str] = None):
+def log_session_created(session_id: str, created_at: float, port: int, client_ip: str | None = None, user_agent: str | None = None):
     """Log a new session creation."""
     try:
         with get_db() as db:
@@ -180,7 +179,7 @@ def log_session_metric(session_id: str, timestamp: float, memory_used_mb: float)
         logger.error(f"Failed to log session metric: {e}")
 
 
-def log_command_execution(session_id: str, timestamp: float, command_name: str, success: bool, execution_time_ms: Optional[float] = None, error_message: Optional[str] = None):
+def log_command_execution(session_id: str, timestamp: float, command_name: str, success: bool, execution_time_ms: float | None = None, error_message: str | None = None):
     """Log a command execution."""
     if not should_log_command(command_name):
         return
@@ -197,7 +196,7 @@ def log_command_execution(session_id: str, timestamp: float, command_name: str, 
         logger.error(f"Failed to log command execution: {e}")
 
 
-def log_user_info_update(session_id: str, first_name: Optional[str], last_name: Optional[str], updated_at: float):
+def log_user_info_update(session_id: str, first_name: str | None, last_name: str | None, updated_at: float):
     """Log or update user information for a session."""
     try:
         with get_db() as db:

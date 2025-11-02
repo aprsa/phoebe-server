@@ -1,8 +1,9 @@
 """Session management endpoints."""
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from ..manager import session_manager
+from ..auth import verify_api_key
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ class UserInfo(BaseModel):
     last_name: str
 
 
-@router.get("/sessions")
+@router.get("/sessions", dependencies=[Depends(verify_api_key)])
 async def list_sessions():
     """Get all active sessions."""
     # Clean up idle sessions before returning list
@@ -33,7 +34,7 @@ async def list_sessions():
     return session_manager.list_sessions()
 
 
-@router.post("/start-session")
+@router.post("/start-session", dependencies=[Depends(verify_api_key)])
 async def start_session(request: Request):
     """Start a new PHOEBE session."""
     client_ip = get_client_ip(request)
@@ -41,7 +42,7 @@ async def start_session(request: Request):
     return session_manager.launch_phoebe_server(client_ip=client_ip, user_agent=user_agent)
 
 
-@router.post("/end-session/{client_id}")
+@router.post("/end-session/{client_id}", dependencies=[Depends(verify_api_key)])
 async def end_session(client_id: str):
     """End a specific session."""
     success = session_manager.shutdown_server(client_id)
@@ -50,7 +51,7 @@ async def end_session(client_id: str):
     return {"success": success}
 
 
-@router.post("/update-user-info/{client_id}")
+@router.post("/update-user-info/{client_id}", dependencies=[Depends(verify_api_key)])
 async def update_user_info(client_id: str, user_info: UserInfo):
     """Update user information for a session."""
     success = session_manager.update_session_user_info(
@@ -63,7 +64,7 @@ async def update_user_info(client_id: str, user_info: UserInfo):
     return {"success": True}
 
 
-@router.get("/session-memory")
+@router.get("/session-memory", dependencies=[Depends(verify_api_key)])
 async def session_memory_all():
     """Get memory usage for all sessions."""
     sessions = session_manager.list_sessions()
@@ -75,7 +76,7 @@ async def session_memory_all():
     return memory_data
 
 
-@router.post("/session-memory/{client_id}")
+@router.post("/session-memory/{client_id}", dependencies=[Depends(verify_api_key)])
 async def session_memory(client_id: str):
     """Get memory usage for a specific session."""
     mem_used = session_manager.get_current_memory_usage(client_id)
@@ -84,7 +85,7 @@ async def session_memory(client_id: str):
     return {"mem_used": mem_used}
 
 
-@router.get("/port-status")
+@router.get("/port-status", dependencies=[Depends(verify_api_key)])
 async def port_status():
     """Get port pool status."""
     return session_manager.get_port_status()
