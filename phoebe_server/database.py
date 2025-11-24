@@ -32,6 +32,7 @@ def init_database():
                 port INTEGER NOT NULL,
                 client_ip TEXT,
                 user_agent TEXT,
+                project_name TEXT,
                 termination_reason TEXT,
                 status TEXT NOT NULL DEFAULT 'active'
             )
@@ -122,15 +123,15 @@ def should_log_command(command_name: str) -> bool:
     return command_name not in exclude
 
 
-def log_session_created(session_id: str, created_at: float, port: int, client_ip: str | None = None, user_agent: str | None = None):
+def log_session_created(session_id: str, created_at: float, port: int, client_ip: str | None = None, user_agent: str | None = None, project_name: str | None = None):
     """Log a new session creation."""
     try:
         with get_db() as db:
             db.execute("""
                 INSERT INTO sessions
-                (session_id, created_at, last_activity, port, client_ip, user_agent, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'active')
-            """, (session_id, created_at, created_at, port, client_ip, user_agent))
+                (session_id, created_at, last_activity, port, client_ip, user_agent, project_name, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+            """, (session_id, created_at, created_at, port, client_ip, user_agent, project_name))
             db.commit()
             logger.debug(f"Logged session creation: {session_id}")
     except Exception as e:

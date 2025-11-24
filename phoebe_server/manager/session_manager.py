@@ -96,7 +96,7 @@ def _wait_for_worker_ready(port: int, timeout: float = 30.0) -> bool:
     return False
 
 
-def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = None) -> dict:
+def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = None, project_name: str | None = None) -> dict:
     """Launch a new PHOEBE worker instance."""
     session_id = str(uuid.uuid4())
     port = request_port()
@@ -124,6 +124,7 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
             'last_activity': current_time,
             'mem_used': 0.0,
             'port': port,
+            'project_name': project_name,
             'user_first_name': None,
             'user_last_name': None,
             'user_display_name': 'Not logged in'
@@ -135,7 +136,8 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
             created_at=current_time,
             port=port,
             client_ip=client_ip,
-            user_agent=user_agent
+            user_agent=user_agent,
+            project_name=project_name
         )
 
         logger.info(f"Started session {session_id} on port {port}")
