@@ -242,7 +242,7 @@ def shutdown_server(session_id: str, termination_reason: str = "manual") -> bool
 
 def list_sessions() -> dict:
     """List all active sessions."""
-    # Clean up dead processes
+    # Clean up dead processes first
     dead_sessions = []
     for session_id, info in server_registry.items():
         proc = info.get("process")
@@ -250,7 +250,10 @@ def list_sessions() -> dict:
             dead_sessions.append(session_id)
 
     for session_id in dead_sessions:
-        shutdown_server(session_id)
+        shutdown_server(session_id, termination_reason="process_died")
+
+    # Clean up idle sessions
+    cleanup_idle_sessions()
 
     return {sid: get_server_info(sid) for sid in server_registry.keys()}
 
