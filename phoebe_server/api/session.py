@@ -36,12 +36,10 @@ async def list_sessions():
 @router.post("/start-session", dependencies=[Depends(verify_api_key)])
 async def start_session(request: Request, metadata: dict | None = None):
     """Start a new PHOEBE session."""
-    print(f'{metadata=}')
     client_ip = get_client_ip(request)
     user_agent = request.headers.get("User-Agent")
-    project_name = metadata.get('project_name', None) if metadata else None
 
-    return session_manager.launch_phoebe_worker(client_ip=client_ip, user_agent=user_agent, project_name=project_name)
+    return session_manager.launch_phoebe_worker(client_ip=client_ip, user_agent=user_agent, metadata=metadata)
 
 
 @router.post("/end-session/{session_id}", dependencies=[Depends(verify_api_key)])

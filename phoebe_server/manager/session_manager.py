@@ -96,11 +96,16 @@ def _wait_for_worker_ready(port: int, timeout: float = 30.0) -> bool:
     return False
 
 
-def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = None, project_name: str | None = None) -> dict:
+def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = None, metadata: dict | None = None) -> dict:
     """Launch a new PHOEBE worker instance."""
     session_id = str(uuid.uuid4())
     port = request_port()
-    current_time = time.time()
+
+    project_name = metadata.get('project_name', None) if metadata else None
+    timestamp = metadata.get('timestamp', None) if metadata else time.time()
+    user_first_name = metadata.get('first_name', None) if metadata else None
+    user_last_name = metadata.get('last_name', None) if metadata else None
+    user_email = metadata.get('email', None) if metadata else None
 
     try:
         proc = psutil.Popen([
@@ -120,13 +125,13 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
         server_registry[session_id] = {
             'session_id': session_id,
             'process': proc,
-            'created_at': current_time,
-            'last_activity': current_time,
+            'created_at': timestamp,
+            'last_activity': timestamp,
             'mem_used': 0.0,
             'port': port,
             'project_name': project_name,
-            'user_first_name': None,
-            'user_last_name': None,
+            'user_first_name': user_first_name,
+            'user_last_name': user_last_name,
             'user_display_name': 'Not logged in'
         }
 
