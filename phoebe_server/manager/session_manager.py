@@ -100,12 +100,12 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
     """Launch a new PHOEBE worker instance."""
     session_id = str(uuid.uuid4())
     port = request_port()
+    timestamp = time.time()
 
     project_name = metadata.get('project_name', None) if metadata else None
-    timestamp = metadata.get('timestamp', None) if metadata else time.time()
-    user_first_name = metadata.get('first_name', None) if metadata else None
-    user_last_name = metadata.get('last_name', None) if metadata else None
-    user_email = metadata.get('email', None) if metadata else None
+    first_name = metadata.get('first_name', None) if metadata else None
+    last_name = metadata.get('last_name', None) if metadata else None
+    email = metadata.get('email', None) if metadata else None
 
     try:
         proc = psutil.Popen([
@@ -130,15 +130,15 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
             'mem_used': 0.0,
             'port': port,
             'project_name': project_name,
-            'user_first_name': user_first_name,
-            'user_last_name': user_last_name,
-            'user_display_name': 'Not logged in'
+            'first_name': first_name,
+            'last_name': last_name,
+            'email': email,
         }
 
         # Log to database
         database.log_session_created(
             session_id=session_id,
-            created_at=current_time,
+            created_at=timestamp,
             port=port,
             client_ip=client_ip,
             user_agent=user_agent,
