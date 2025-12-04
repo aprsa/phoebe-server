@@ -152,9 +152,22 @@ class PhoebeWorker:
 
             if kind == 'lc':
                 model[dataset]['fluxes'] = self.bundle.get_value('fluxes', dataset=dataset, context='model')
+
+                # Structure of the returned model depends on whether solution is
+                # passed in kwargs or not. Without solution (default), run_compute
+                # computes the model based on current bundle parameters. If solution
+                # is provided, it *samples* the model based on that solution. Thus,
+                # we need to pick the first (and only) sample and return that instead
+                # of the resulting 2D array.
+
+                if 'solution' in kwargs:
+                    model[dataset]['fluxes'] = model[dataset]['fluxes'][0]  # take the first sample
             if kind == 'rv':
                 model[dataset]['rv1s'] = self.bundle.get_value('rvs', dataset=dataset, component='primary', context='model')
                 model[dataset]['rv2s'] = self.bundle.get_value('rvs', dataset=dataset, component='secondary', context='model')
+                if 'solution' in kwargs:
+                    model[dataset]['rv1s'] = model[dataset]['rv1s'][0]  # take the first sample
+                    model[dataset]['rv2s'] = model[dataset]['rv2s'][0]  # take the first sample
 
         return {
             'model': model
