@@ -135,7 +135,13 @@ class PhoebeWorker:
 
     def remove_dataset(self, dataset, **kwargs):
         self.bundle.remove_dataset(dataset)
-        return {'success': True}
+
+        # PHOEBE's remove_dataset doesn't remove params in custom 'ui' context,
+        # so we need to manually remove them
+        for ui_param in self.bundle.filter(dataset=dataset, context='ui'):
+            self.bundle.remove_parameter(ui_param)
+
+        return {}
 
     def run_compute(self, **kwargs):
         self.bundle.run_compute(**kwargs)
@@ -143,6 +149,7 @@ class PhoebeWorker:
         model = {}
 
         # We now need to traverse all datasets and assign the results accordingly:
+        print(f'{self.bundle.datasets=}')
         for dataset in self.bundle.datasets:
             kind = self.bundle[f'{dataset}@dataset'].kind  # 'lc' or 'rv'
 
@@ -191,7 +198,7 @@ class PhoebeWorker:
 
     def load_bundle(self, bundle, **kwargs):
         self.bundle = phoebe.load(json.loads(bundle, object_pairs_hook=phoebe.utils.parse_json))  # type: ignore
-        return {'success': True}
+        return {}
 
     def save_bundle(self, **kwargs):
         return {'bundle': json.dumps(self.bundle.to_json(incl_uniqueid=True))}
