@@ -44,15 +44,9 @@ class PhoebeWorker:
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(f"tcp://127.0.0.1:{port}")
 
-        # TODO: move to the client and add SDK/API support!
-        self.bundle = phoebe.default_binary()
-        self.bundle.flip_constraint('mass@primary', solve_for='q@binary')
-        self.bundle.flip_constraint('mass@secondary', solve_for='sma@binary')
-        self.bundle.add_solver('differential_corrections', solver='dc')
-        phoebe.parameters.parameters._contexts.append('ui')
-
         self.commands = {
             'ping': self.ping,
+            'set_morphology': self.set_morphology,
             'get_parameter': self.get_parameter,
             'get_value': self.get_value,
             'set_value': self.set_value,
@@ -69,6 +63,8 @@ class PhoebeWorker:
             # auxiliary commands:
             'attach_parameters': self.attach_parameters,
         }
+
+        self.set_morphology(morphology='detached')
 
         print(f"[phoebe_worker] Running on port {port}")
 
@@ -89,6 +85,7 @@ class PhoebeWorker:
                 continue
 
             try:
+                # print(f'[phoebe_worker] Executing command: {command} with args: {args}')
                 result = self.commands[command](**args)
                 response = {
                     'success': True,
@@ -108,6 +105,25 @@ class PhoebeWorker:
     def ping(self):
         """Health check / readiness probe."""
         return {'status': 'ready'}
+
+    def set_morphology(self, morphology: str):
+        if morphology.lower() == 'detached':
+            self.bundle = phoebe.default_binary()
+        elif morphology.lower() == 'semi-detached':
+            self.bundle = phoebe.default_binary()
+            self.bundle.add_constraint('semidetached', 'secondary')
+        elif morphology.lower() == 'contact':
+            self.bundle = phoebe.default_binary(contact_binary=True)
+        else:
+            raise ValueError(f'Unknown morphology: {morphology}')
+
+        self.bundle.flip_constraint('mass@primary', solve_for='q@binary')
+        self.bundle.flip_constraint('mass@secondary', solve_for='sma@binary')
+        self.bundle.add_solver('differential_corrections', solver='dc')
+        if 'ui' not in phoebe.parameters.parameters._contexts:
+            phoebe.parameters.parameters._contexts.append('ui')
+
+        return {}
 
     def get_parameter(self, **kwargs):
         par = self.bundle.get_parameter(**kwargs)
@@ -130,7 +146,13 @@ class PhoebeWorker:
             raise
 
     def add_dataset(self, **kwargs):
-        self.bundle.add_dataset(**kwargs)
+        try:
+            self.bundle.add_dataset(**kwargs)
+        except Exception as e:
+            print(f"Error adding dataset: {e}")
+            print(f'Traceback: {traceback.format_exc()}')
+            raise
+
         return {}
 
     def remove_dataset(self, dataset, **kwargs):
@@ -150,7 +172,7 @@ class PhoebeWorker:
 
         # We now need to traverse all datasets and assign the results accordingly:
         for dataset in self.bundle.datasets:
-            kind = self.bundle[f'{dataset}@dataset'].kind  # 'lc' or 'rv'
+            kind = self.bundle[f'{dataset}@dataset'].kind  # 'lc', 'rv', ...
 
             model[dataset] = {}
             model[dataset]['times'] = self.bundle.get_value('compute_times', dataset=dataset, context='dataset')
@@ -169,11 +191,11 @@ class PhoebeWorker:
                 if 'solution' in kwargs:
                     model[dataset]['fluxes'] = model[dataset]['fluxes'][0]  # take the first sample
             if kind == 'rv':
-                model[dataset]['rv1s'] = self.bundle.get_value('rvs', dataset=dataset, component='primary', context='model')
-                model[dataset]['rv2s'] = self.bundle.get_value('rvs', dataset=dataset, component='secondary', context='model')
+                model[dataset]['rvs_primary'] = self.bundle.get_value('rvs', dataset=dataset, component='primary', context='model')
+                model[dataset]['rvs_secondary'] = self.bundle.get_value('rvs', dataset=dataset, component='secondary', context='model')
                 if 'solution' in kwargs:
-                    model[dataset]['rv1s'] = model[dataset]['rv1s'][0]  # take the first sample
-                    model[dataset]['rv2s'] = model[dataset]['rv2s'][0]  # take the first sample
+                    model[dataset]['rvs_primary'] = model[dataset]['rvs_primary'][0]  # take the first sample
+                    model[dataset]['rvs_secondary'] = model[dataset]['rvs_secondary'][0]  # take the first sample
 
         return {
             'model': model
@@ -209,11 +231,20 @@ class PhoebeWorker:
         return {'datasets': datasets}
 
     def get_uniqueid(self, twig, **kwargs):
-        return self.bundle.get_parameter(twig).uniqueid
+        try:
+            par = self.bundle.get_parameter(twig)
+        except ValueError:
+            return None
+
+        if hasattr(par, 'uniqueid'):
+            return self.bundle.get_parameter(twig).uniqueid
+        return None
 
     def is_parameter_constrained(self, twig=None, uniqueid=None, **kwargs):
         par = self.bundle.get_parameter(twig=twig, uniqueid=uniqueid)
-        return bool(par.constrained_by)
+        if hasattr(par, 'constrained_by'):
+            return bool(par.constrained_by)
+        return False
 
     def attach_parameters(self, parameters: list[dict[str, Any]]):
         """
