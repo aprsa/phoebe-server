@@ -34,10 +34,6 @@ RUN chmod +x /app/docker-entrypoint.sh
 # Expose port 80 (internal)
 EXPOSE 80
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:80/health')" || exit 1
-
 # Entrypoint handles init-db automatically (tini reaps worker processes)
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker-entrypoint.sh"]
 
