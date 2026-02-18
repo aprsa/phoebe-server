@@ -5,17 +5,27 @@ from fastapi import APIRouter, HTTPException, Depends
 from ..manager import session_manager
 from ..worker.proxy import send_command
 from .. import database
-from ..auth import verify_api_key
+from ..auth import get_current_user
 
 router = APIRouter()
 
 
-@router.post('/send/{session_id}', dependencies=[Depends(verify_api_key)])
-async def send(session_id: str, command: dict):
+@router.post("/send/{session_id}")
+async def send(
+    session_id: str,
+    command: dict,
+    user: dict | None = Depends(get_current_user),
+):
     """Send a command to a PHOEBE session."""
     info = session_manager.get_server_info(session_id)
     if not info:
-        raise HTTPException(status_code=404, detail='Invalid session ID')
+        raise HTTPException(status_code=404, detail="Invalid session ID")
+
+    # Ownership check
+    if user is not None:
+        owner = info.get('user_id')
+        if owner is not None and owner != user['user_id']:
+            raise HTTPException(status_code=403, detail='You are not the owner of this session')
 
     # Update activity timestamp
     session_manager.update_last_activity(session_id)

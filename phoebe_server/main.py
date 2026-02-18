@@ -5,7 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import session, command, health
+from .api import session, command, health, auth
 from .manager.session_manager import load_port_config, cleanup_idle_sessions, shutdown_all_sessions
 from .config import config
 from . import database
@@ -78,5 +78,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router, tags=["health"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(session.router, prefix="/dash", tags=["session"])
 app.include_router(command.router, tags=["command"])

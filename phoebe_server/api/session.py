@@ -1,87 +1,110 @@
 """Session management endpoints."""
 
 from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel
 from ..manager import session_manager
-from ..auth import verify_api_key
+from ..auth import get_current_user
 
 router = APIRouter()
 
 
-def get_client_ip(request: Request) -> str:
+def _get_client_ip(request: Request) -> str:
     """Extract client IP from request, respecting X-Forwarded-For."""
     # Check X-Forwarded-For header (proxy/load balancer)
     forwarded_for = request.headers.get('X-Forwarded-For', None)
     if forwarded_for is not None:
-        # X-Forwarded-For can contain multiple IPs, first one is the original client
-        return forwarded_for.split(",")[0].strip()
-    # Fall back to direct connection IP
+        return forwarded_for.split(',')[0].strip()
     if request.client:
         return request.client.host
-    return "unknown"
+    return 'unknown'
 
 
-class UserInfo(BaseModel):
-    first_name: str
-    last_name: str
-    email: str | None = None
+def _check_ownership(session_id: str, user: dict | None):
+    """Raise 403 if user doesn't own the session."""
+    if user is None:
+        return  # auth mode "none" — no ownership check
+    owner = session_manager.get_session_owner(session_id)
+    if owner is not None and owner != user['user_id']:
+        raise HTTPException(status_code=403, detail='You are not the owner of this session')
 
 
-@router.get("/sessions", dependencies=[Depends(verify_api_key)])
-async def list_sessions():
-    """Get all active sessions."""
-    return session_manager.list_sessions()
+# ---------- sessions --------------------------------------------------
 
 
-@router.post("/start-session", dependencies=[Depends(verify_api_key)])
-async def start_session(request: Request, metadata: dict | None = None):
+@router.get('/sessions')
+async def list_sessions(user: dict | None = Depends(get_current_user)):
+    """List active sessions visible to the current user."""
+    user_id = user['user_id'] if user else None
+    return session_manager.list_sessions(user_id=user_id)
+
+
+@router.post('/start-session')
+async def start_session(
+    request: Request,
+    metadata: dict | None = None,
+    user: dict | None = Depends(get_current_user),
+):
     """Start a new PHOEBE session."""
-    client_ip = get_client_ip(request)
-    user_agent = request.headers.get("User-Agent")
+    client_ip = _get_client_ip(request)
+    user_agent = request.headers.get('User-Agent')
 
-    return session_manager.launch_phoebe_worker(client_ip=client_ip, user_agent=user_agent, metadata=metadata)
+    user_id = user['user_id'] if user else None
+    full_name = user['full_name'] if user else ''
+
+    try:
+        return session_manager.launch_phoebe_worker(
+            client_ip=client_ip,
+            user_agent=user_agent,
+            user_id=user_id,
+            full_name=full_name,
+            metadata=metadata,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=429, detail=str(exc))
 
 
-@router.post("/end-session/{session_id}", dependencies=[Depends(verify_api_key)])
-async def end_session(session_id: str):
+@router.post('/end-session/{session_id}')
+async def end_session(
+    session_id: str,
+    user: dict | None = Depends(get_current_user),
+):
     """End a specific session."""
+    _check_ownership(session_id, user)
     success = session_manager.shutdown_server(session_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"success": success}
+        raise HTTPException(status_code=404, detail='Session not found')
+    return {'success': success}
 
 
-@router.post("/update-user-info/{session_id}", dependencies=[Depends(verify_api_key)])
-async def update_user_info(session_id: str, first_name: str, last_name: str, email: str = ''):
-    """Update user information for a session."""
-    success = session_manager.update_session_user_info(session_id, first_name, last_name, email)
-    if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"success": True}
+# ---------- memory / ports --------------------------------------------
 
 
-@router.get("/session-memory", dependencies=[Depends(verify_api_key)])
-async def session_memory_all():
-    """Get memory usage for all sessions."""
-    sessions = session_manager.list_sessions()
+@router.get('/session-memory')
+async def session_memory_all(user: dict | None = Depends(get_current_user)):
+    """Get memory usage for all sessions visible to the current user."""
+    user_id = user['user_id'] if user else None
+    sessions = session_manager.list_sessions(user_id=user_id)
     memory_data = {}
-    for session_id in sessions.keys():
+    for session_id in sessions:
         mem_used = session_manager.get_current_memory_usage(session_id)
         if mem_used is not None:
             memory_data[session_id] = mem_used
     return memory_data
 
 
-@router.post("/session-memory/{session_id}", dependencies=[Depends(verify_api_key)])
-async def session_memory(session_id: str):
+@router.post('/session-memory/{session_id}')
+async def session_memory(
+    session_id: str,
+    user: dict | None = Depends(get_current_user),
+):
     """Get memory usage for a specific session."""
+    _check_ownership(session_id, user)
     mem_used = session_manager.get_current_memory_usage(session_id)
     if mem_used is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return {"mem_used": mem_used}
+        raise HTTPException(status_code=404, detail='Session not found')
+    return {'mem_used': mem_used}
 
 
-@router.get("/port-status", dependencies=[Depends(verify_api_key)])
+@router.get('/port-status')
 async def port_status():
     """Get port pool status."""
     return session_manager.get_port_status()

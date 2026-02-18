@@ -96,16 +96,31 @@ def _wait_for_worker_ready(port: int, timeout: float = 30.0) -> bool:
     return False
 
 
-def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = None, metadata: dict | None = None) -> dict:
+def launch_phoebe_worker(
+    client_ip: str | None = None,
+    user_agent: str | None = None,
+    user_id: str | None = None,
+    full_name: str = "",
+    metadata: dict | None = None,
+) -> dict:
     """Launch a new PHOEBE worker instance."""
+    # Check max_workers_per_user limit
+    max_workers = config.resources.max_workers_per_user
+    if max_workers > 0 and user_id:
+        user_sessions = sum(
+            1 for info in server_registry.values()
+            if info.get('user_id') == user_id
+        )
+        if user_sessions >= max_workers:
+            raise RuntimeError(
+                f"User has reached the maximum of {max_workers} concurrent session(s)"
+            )
+
     session_id = str(uuid.uuid4())
     port = request_port()
     timestamp = time.time()
 
     project_name = metadata.get('project_name', None) if metadata else None
-    first_name = metadata.get('first_name', None) if metadata else None
-    last_name = metadata.get('last_name', None) if metadata else None
-    email = metadata.get('email', None) if metadata else None
 
     try:
         proc = psutil.Popen([
@@ -129,10 +144,9 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
             'last_activity': timestamp,
             'mem_used': 0.0,
             'port': port,
+            'user_id': user_id,
+            'full_name': full_name,
             'project_name': project_name,
-            'first_name': first_name,
-            'last_name': last_name,
-            'email': email,
         }
 
         # Log to database
@@ -140,6 +154,8 @@ def launch_phoebe_worker(client_ip: str | None = None, user_agent: str | None = 
             session_id=session_id,
             created_at=timestamp,
             port=port,
+            user_id=user_id,
+            full_name=full_name,
             client_ip=client_ip,
             user_agent=user_agent,
             project_name=project_name
@@ -189,20 +205,12 @@ def get_server_info(session_id: str) -> dict | None:
     return {k: v for k, v in info.items() if k != 'process'}
 
 
-def update_session_user_info(session_id: str, first_name: str, last_name: str, email: str) -> bool:
-    """Update user information for a session."""
+def get_session_owner(session_id: str) -> str | None:
+    """Get the user_id that owns a session, or None if session not found."""
     info = server_registry.get(session_id)
     if info:
-        info['user_first_name'] = first_name
-        info['user_last_name'] = last_name
-        info['user_email'] = email
-        info['user_display_name'] = f"{first_name} {last_name}"
-        current_time = time.time()
-        update_last_activity(session_id)
-        # Log to database
-        database.log_user_info_update(session_id, first_name, last_name, email, current_time)
-        return True
-    return False
+        return info.get('user_id')
+    return None
 
 
 def shutdown_server(session_id: str, termination_reason: str = "manual") -> bool:
@@ -245,8 +253,8 @@ def shutdown_server(session_id: str, termination_reason: str = "manual") -> bool
     return True
 
 
-def list_sessions() -> dict:
-    """List all active sessions."""
+def list_sessions(user_id: str | None = None) -> dict:
+    """List active sessions, optionally filtered by user_id."""
     # Clean up dead processes first
     dead_sessions = []
     for session_id, info in server_registry.items():
@@ -260,7 +268,13 @@ def list_sessions() -> dict:
     # Clean up idle sessions
     cleanup_idle_sessions()
 
-    return {sid: get_server_info(sid) for sid in server_registry.keys()}
+    result = {}
+    for sid in server_registry:
+        info = server_registry[sid]
+        if user_id is not None and info.get('user_id') != user_id:
+            continue
+        result[sid] = get_server_info(sid)
+    return result
 
 
 def cleanup_idle_sessions():

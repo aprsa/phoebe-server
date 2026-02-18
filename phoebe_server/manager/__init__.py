@@ -6,7 +6,7 @@ from .session_manager import (
     shutdown_server,
     list_sessions,
     get_server_info,
-    update_session_user_info,
+    get_session_owner,
     get_current_memory_usage,
     get_port_status,
 )
@@ -17,7 +17,7 @@ __all__ = [
     'shutdown_server',
     'list_sessions',
     'get_server_info',
-    'update_session_user_info',
+    'get_session_owner',
     'get_current_memory_usage',
     'get_port_status',
 ]

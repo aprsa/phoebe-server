@@ -38,13 +38,6 @@ def test_session_lifecycle_logging(client):
     session_data = response.json()
     session_id = session_data["session_id"]
 
-    # Update user info
-    response = client.post(
-        f"/dash/update-user-info/{session_id}",
-        params={"first_name": "Test", "last_name": "User", "email": "test@example.com"}
-    )
-    assert response.status_code == 200, f"Failed to update user info: {response.json()}"
-
     time.sleep(1.0)  # Allow DB writes to complete
 
     conn = sqlite3.connect(config.database.path)
@@ -63,21 +56,6 @@ def test_session_lifecycle_logging(client):
         assert session_row[2] is not None  # client_ip
         assert session_row[3] == "pytest/1.0"
         assert session_row[4] == "active"
-
-        # Check user info
-        cursor.execute("""
-            SELECT first_name, last_name, email FROM session_user_info WHERE session_id = ?
-        """, (session_id,))
-        user_row = cursor.fetchone()
-        # Debug: print all rows in table
-        if user_row is None:
-            cursor.execute("SELECT * FROM session_user_info")
-            all_rows = cursor.fetchall()
-            print(f"All user_info rows: {all_rows}")
-        assert user_row is not None
-        assert user_row[0] == "Test"
-        assert user_row[1] == "User"
-        assert user_row[2] == "test@example.com"
 
         # Send ping command (should be filtered)
         response = client.post(

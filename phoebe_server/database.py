@@ -1,4 +1,7 @@
+"""SQLite database for session tracking and user management."""
+
 import sqlite3
+import time
 import logging
 from pathlib import Path
 from contextlib import contextmanager
@@ -22,10 +25,26 @@ def init_database():
         # Enable WAL mode for better concurrency
         db.execute("PRAGMA journal_mode=WAL")
 
-        # Create tables
+        # --- Users (jwt mode only) ---
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                hashed_password TEXT NOT NULL,
+                first_name TEXT NOT NULL DEFAULT '',
+                last_name TEXT NOT NULL DEFAULT '',
+                role TEXT NOT NULL DEFAULT 'student',
+                created_at REAL NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+
+        # --- Sessions ---
         db.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
+                user_id TEXT,
+                full_name TEXT NOT NULL DEFAULT '',
                 created_at REAL NOT NULL,
                 destroyed_at REAL,
                 last_activity REAL NOT NULL,
@@ -38,6 +57,7 @@ def init_database():
             )
         """)
 
+        # --- Session metrics ---
         db.execute("""
             CREATE TABLE IF NOT EXISTS session_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +68,7 @@ def init_database():
             )
         """)
 
+        # --- Session commands ---
         db.execute("""
             CREATE TABLE IF NOT EXISTS session_commands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,36 +82,40 @@ def init_database():
             )
         """)
 
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS session_user_info (
-                session_id TEXT PRIMARY KEY,
-                first_name TEXT,
-                last_name TEXT,
-                email TEXT,
-                updated_at REAL NOT NULL,
-                FOREIGN KEY (session_id) REFERENCES sessions (session_id)
-            )
-        """)
-
-        # Create indexes
+        # Indexes
         db.execute("""
             CREATE INDEX IF NOT EXISTS idx_sessions_created_at
             ON sessions (created_at)
         """)
-
         db.execute("""
             CREATE INDEX IF NOT EXISTS idx_sessions_status
             ON sessions (status)
         """)
 
+        # --- Schema migration: add columns introduced in the auth rewrite ---
+        existing_cols = {
+            row[1] for row in db.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if "user_id" not in existing_cols:
+            db.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
+        if "full_name" not in existing_cols:
+            db.execute("ALTER TABLE sessions ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
+
+        db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sessions_user_id
+            ON sessions (user_id)
+        """)
         db.execute("""
             CREATE INDEX IF NOT EXISTS idx_session_commands_session_id
             ON session_commands (session_id)
         """)
-
         db.execute("""
             CREATE INDEX IF NOT EXISTS idx_session_metrics_session_id
             ON session_metrics (session_id)
+        """)
+        db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_email
+            ON users (email)
         """)
 
         db.commit()
@@ -104,34 +129,94 @@ def get_db():
         raise RuntimeError("Database not initialized. Call init_database() first.")
 
     conn = sqlite3.connect(str(_db_path), timeout=10.0)
+    conn.row_factory = sqlite3.Row
     try:
         yield conn
     finally:
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# User operations (jwt mode)
+# ---------------------------------------------------------------------------
+
+def create_user(
+    email: str, hashed_password: str,
+    first_name: str = "", last_name: str = "",
+    role: str = "student",
+) -> dict | None:
+    """Create a new user. Returns the user dict or None if email already exists."""
+    try:
+        with get_db() as db:
+            db.execute("""
+                INSERT INTO users (email, hashed_password, first_name, last_name, role, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (email, hashed_password, first_name, last_name, role, time.time()))
+            db.commit()
+            return get_user_by_email(email)
+    except sqlite3.IntegrityError:
+        return None
+    except Exception as e:
+        logger.error(f"Failed to create user: {e}")
+        return None
+
+
+def get_user_by_email(email: str) -> dict | None:
+    """Look up a user by email."""
+    try:
+        with get_db() as db:
+            row = db.execute(
+                "SELECT * FROM users WHERE email = ?", (email,)
+            ).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Failed to get user by email: {e}")
+        return None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """Look up a user by ID."""
+    try:
+        with get_db() as db:
+            row = db.execute(
+                "SELECT * FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Failed to get user by id: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Session logging
+# ---------------------------------------------------------------------------
+
 def should_log_command(command_name: str) -> bool:
     """Check if a command should be logged based on configuration."""
     exclude = [c.strip() for c in config.database.log_exclude_commands.split(",") if c.strip()]
     include = [c.strip() for c in config.database.log_include_commands.split(",") if c.strip()]
 
-    # If include list is specified, only log those
     if include:
         return command_name in include
-
-    # Otherwise, log everything except excluded
     return command_name not in exclude
 
 
-def log_session_created(session_id: str, created_at: float, port: int, client_ip: str | None = None, user_agent: str | None = None, project_name: str | None = None):
+def log_session_created(
+    session_id: str, created_at: float, port: int,
+    user_id: str | None = None, full_name: str = "",
+    client_ip: str | None = None, user_agent: str | None = None,
+    project_name: str | None = None,
+):
     """Log a new session creation."""
     try:
         with get_db() as db:
             db.execute("""
                 INSERT INTO sessions
-                (session_id, created_at, last_activity, port, client_ip, user_agent, project_name, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-            """, (session_id, created_at, created_at, port, client_ip, user_agent, project_name))
+                (session_id, user_id, full_name, created_at, last_activity, port,
+                 client_ip, user_agent, project_name, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            """, (session_id, user_id, full_name, created_at, created_at, port,
+                  client_ip, user_agent, project_name))
             db.commit()
             logger.debug(f"Logged session creation: {session_id}")
     except Exception as e:
@@ -158,9 +243,7 @@ def log_session_activity(session_id: str, last_activity: float):
     try:
         with get_db() as db:
             db.execute("""
-                UPDATE sessions
-                SET last_activity = ?
-                WHERE session_id = ?
+                UPDATE sessions SET last_activity = ? WHERE session_id = ?
             """, (last_activity, session_id))
             db.commit()
     except Exception as e:
@@ -172,8 +255,7 @@ def log_session_metric(session_id: str, timestamp: float, memory_used_mb: float)
     try:
         with get_db() as db:
             db.execute("""
-                INSERT INTO session_metrics
-                (session_id, timestamp, memory_used_mb)
+                INSERT INTO session_metrics (session_id, timestamp, memory_used_mb)
                 VALUES (?, ?, ?)
             """, (session_id, timestamp, memory_used_mb))
             db.commit()
@@ -181,7 +263,11 @@ def log_session_metric(session_id: str, timestamp: float, memory_used_mb: float)
         logger.error(f"Failed to log session metric: {e}")
 
 
-def log_command_execution(session_id: str, timestamp: float, command_name: str, success: bool, execution_time_ms: float | None = None, error_message: str | None = None):
+def log_command_execution(
+    session_id: str, timestamp: float, command_name: str,
+    success: bool, execution_time_ms: float | None = None,
+    error_message: str | None = None,
+):
     """Log a command execution."""
     if not should_log_command(command_name):
         return
@@ -192,21 +278,8 @@ def log_command_execution(session_id: str, timestamp: float, command_name: str, 
                 INSERT INTO session_commands
                 (session_id, timestamp, command_name, success, execution_time_ms, error_message)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (session_id, timestamp, command_name, int(success), execution_time_ms, error_message))
+            """, (session_id, timestamp, command_name, int(success),
+                  execution_time_ms, error_message))
             db.commit()
     except Exception as e:
         logger.error(f"Failed to log command execution: {e}")
-
-
-def log_user_info_update(session_id: str, first_name: str, last_name: str, email: str, updated_at: float):
-    """Log or update user information for a session."""
-    try:
-        with get_db() as db:
-            db.execute("""
-                INSERT OR REPLACE INTO session_user_info
-                (session_id, first_name, last_name, email, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (session_id, first_name, last_name, email, updated_at))
-            db.commit()
-    except Exception as e:
-        logger.error(f"Failed to log user info update: {e}")
