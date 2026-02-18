@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: phoebe-server:latest
+    image: phoebe-lab-server:latest
     container_name: phoebe-lab-server
     restart: unless-stopped
     environment:
