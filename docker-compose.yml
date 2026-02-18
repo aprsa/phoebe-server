@@ -10,16 +10,11 @@ services:
       - PHOEBE_ENABLE_ONLINE_PASSBANDS=FALSE
       - PHOEBE_PBDIR=/etc/phoebe/atmospheres/tables/passbands
     ports:
-      # Map host port to container port 80
-      # Change the left side to your desired external port
       - "8001:80"
     volumes:
-      # Mount user config (required)
-      - ./config.toml:/app/config.toml:ro
-      # Persist database
-      - phoebe-data:/app/data
-      # Passband data
+      - ./config.toml:/etc/phoebe-server/config.toml:ro
       - ~/.phoebe/atmospheres/tables/passbands:/etc/phoebe/atmospheres/tables/passbands:ro
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 30s
@@ -32,7 +27,3 @@ services:
           memory: 120G
         reservations:
           memory: 1G
-
-volumes:
-  phoebe-data:
-    driver: local
