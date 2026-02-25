@@ -56,10 +56,13 @@ Create a `config.toml`:
 [server]
 host = "0.0.0.0"
 port = 8001
-workers = 4
 
 [auth]
-enabled = false
+# Auth mode: "none" | "password" | "jwt" | "external"
+mode = "jwt"
+jwt_secret_key = ""  # Set via env var in production (see below)
+jwt_algorithm = "HS256"
+jwt_expire_minutes = 1440  # 24h
 
 [port_pool]
 start = 6560
@@ -76,7 +79,18 @@ idle_timeout_seconds = 1800  # 30 minutes
 path = "data/sessions.db"
 log_exclude_commands = "ping"
 log_include_commands = ""
+
+[resources]
+max_workers_per_user = 0  # 0 = unlimited
 ```
+
+**JWT Secret**: In production, generate a strong secret and set it via environment variable:
+
+```bash
+> export PHOEBE_JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+```
+
+The server refuses to start in `jwt`/`external` mode with an empty or `"test"` secret.
 
 ## Client Usage
 
@@ -117,16 +131,23 @@ sqlite3 data/sessions.db "SELECT * FROM sessions WHERE status='active'"
 ## Architecture
 
 ```text
-Client Request → FastAPI → Session Manager → ZMQ → PHOEBE Worker
-                     ↓            ↓                      ↓
-                 Auth Layer   SQLite DB            PHOEBE Instance
-                              (Logging)
+Client Request → FastAPI (threadpool) → ZMQ Proxy → PHOEBE Worker
+                     ↓                       ↓             ↓
+                 Auth Layer            Session Mgr   PHOEBE Instance
+                                          ↓
+                                     SQLite DB
+                                     (Logging)
 ```
 
 ### Components
 
-- **FastAPI**: REST API with automatic OpenAPI docs
-- **Session Manager**: Lifecycle management, port allocation, idle cleanup
-- **ZMQ Workers**: Isolated PHOEBE processes (one per session)
-- **SQLite Database**: Session tracking and command logging
-- **PHOEBE Instance**: Binary star modeling engine
+- **FastAPI**: REST API with automatic OpenAPI docs. All endpoints are sync (`def`) and run in a threadpool for concurrent request handling.
+- **Session Manager**: Lifecycle management, port allocation, idle cleanup. Uses in-memory state (single uvicorn worker required).
+- **ZMQ Workers**: Isolated PHOEBE processes (one per session). Each worker handles SIGTERM for graceful shutdown and uses `LINGER=0` for clean socket release.
+- **ZMQ Proxy**: Stateless REQ/REP client with configurable timeouts (default 5 min receive, 5s send). Context and socket are always cleaned up in `finally` blocks.
+- **SQLite Database**: Session tracking and command logging (WAL mode).
+- **PHOEBE Instance**: Binary star modeling engine.
+
+### Concurrency
+
+The server runs a **single uvicorn worker** (1 process). Session state is kept in module-level globals, so multiple workers would cause port collisions and invisible sessions. Concurrency comes from FastAPI's threadpool: each incoming request runs in its own thread, allowing multiple ZMQ calls to different PHOEBE workers simultaneously. All heavy computation happens in the worker subprocesses, not in the API process.

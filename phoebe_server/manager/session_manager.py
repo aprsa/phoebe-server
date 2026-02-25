@@ -73,27 +73,29 @@ def release_port(port: int):
 def _wait_for_worker_ready(port: int, timeout: float = 30.0) -> bool:
     """Wait for worker to be ready by sending a ping command."""
     start_time = time.time()
-    while time.time() - start_time < timeout:
-        try:
-            context = zmq.Context()
-            socket = context.socket(zmq.REQ)
-            socket.setsockopt(zmq.RCVTIMEO, 2000)  # 2 second receive timeout
-            socket.setsockopt(zmq.SNDTIMEO, 2000)  # 2 second send timeout
-            socket.connect(f"tcp://127.0.0.1:{port}")
-
-            socket.send_json({"command": "ping"})
-            response = socket.recv_json()
-            socket.close()
-            context.term()
-
-            if isinstance(response, dict) and response.get("success"):
-                return True
-        except zmq.Again:
-            time.sleep(0.5)
-        except Exception as e:
-            logger.debug(f"Worker readiness check attempt failed: {e}")
-            time.sleep(0.5)
-    return False
+    ctx = zmq.Context()
+    try:
+        while time.time() - start_time < timeout:
+            sock = ctx.socket(zmq.REQ)
+            sock.setsockopt(zmq.RCVTIMEO, 2000)
+            sock.setsockopt(zmq.SNDTIMEO, 2000)
+            sock.setsockopt(zmq.LINGER, 0)
+            try:
+                sock.connect(f"tcp://127.0.0.1:{port}")
+                sock.send_json({"command": "ping"})
+                response = sock.recv_json()
+                if isinstance(response, dict) and response.get("success"):
+                    return True
+            except zmq.Again:
+                time.sleep(0.5)
+            except Exception as e:
+                logger.debug(f"Worker readiness check attempt failed: {e}")
+                time.sleep(0.5)
+            finally:
+                sock.close()
+        return False
+    finally:
+        ctx.term()
 
 
 def launch_phoebe_worker(
@@ -188,8 +190,7 @@ def get_current_memory_usage(session_id: str) -> float | None:
             mem_used = proc.memory_info().rss / (1024 * 1024)  # MiB
             server_registry[session_id]['mem_used'] = mem_used
             current_time = time.time()
-            update_last_activity(session_id)
-            # Log metric to database
+            # Log metric to database (does NOT reset idle timer)
             database.log_session_metric(session_id, current_time, mem_used)
             return mem_used
         except psutil.NoSuchProcess:

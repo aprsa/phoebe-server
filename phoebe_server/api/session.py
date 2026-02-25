@@ -31,18 +31,14 @@ def _check_ownership(session_id: str, user: dict | None):
 
 
 @router.get('/sessions')
-async def list_sessions(user: dict | None = Depends(get_current_user)):
+def list_sessions(user: dict | None = Depends(get_current_user)):
     """List active sessions visible to the current user."""
     user_id = user['user_id'] if user else None
     return session_manager.list_sessions(user_id=user_id)
 
 
 @router.post('/start-session')
-async def start_session(
-    request: Request,
-    metadata: dict | None = None,
-    user: dict | None = Depends(get_current_user),
-):
+def start_session(request: Request, metadata: dict | None = None, user: dict | None = Depends(get_current_user)):
     """Start a new PHOEBE session."""
     client_ip = _get_client_ip(request)
     user_agent = request.headers.get('User-Agent')
@@ -63,7 +59,7 @@ async def start_session(
 
 
 @router.post('/end-session/{session_id}')
-async def end_session(
+def end_session(
     session_id: str,
     user: dict | None = Depends(get_current_user),
 ):
@@ -79,7 +75,7 @@ async def end_session(
 
 
 @router.get('/session-memory')
-async def session_memory_all(user: dict | None = Depends(get_current_user)):
+def session_memory_all(user: dict | None = Depends(get_current_user)):
     """Get memory usage for all sessions visible to the current user."""
     user_id = user['user_id'] if user else None
     sessions = session_manager.list_sessions(user_id=user_id)
@@ -92,7 +88,7 @@ async def session_memory_all(user: dict | None = Depends(get_current_user)):
 
 
 @router.post('/session-memory/{session_id}')
-async def session_memory(
+def session_memory(
     session_id: str,
     user: dict | None = Depends(get_current_user),
 ):
@@ -105,6 +101,6 @@ async def session_memory(
 
 
 @router.get('/port-status')
-async def port_status():
-    """Get port pool status."""
+def port_status(user: dict | None = Depends(get_current_user)):
+    """Get port pool status (authenticated)."""
     return session_manager.get_port_status()

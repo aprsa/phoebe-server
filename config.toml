@@ -3,7 +3,7 @@
 [server]
 host = "0.0.0.0"
 port = 8001
-workers = 4  # not (yet) wired in!
+workers = 1  # must be 1: session state is in-process globals.
 
 [auth]
 # Auth mode: "none" | "password" | "jwt" | "external"

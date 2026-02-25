@@ -1,6 +1,8 @@
 """PHOEBE worker process."""
 
+import signal
 import sys
+import math
 from typing import Any
 import zmq
 import phoebe
@@ -10,14 +12,25 @@ import numpy as np
 from phoebe import u
 
 
+def _sanitize_float(value: float) -> float | None:
+    """Replace nan/inf with None for JSON compliance."""
+    if math.isfinite(value):
+        return value
+    return None
+
+
 def make_json_serializable(obj):
-    """Convert numpy arrays to JSON-compatible types."""
-    # if isinstance(obj, np.ndarray):
-    #     return obj.tolist()
+    """Convert numpy/astropy types to JSON-compatible Python types.
+
+    Handles nan/inf by converting them to None, since standard
+    json.dumps() rejects out-of-range float values.
+    """
     if isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
-        return float(obj)
+        return _sanitize_float(float(obj))
+    elif isinstance(obj, float):
+        return _sanitize_float(obj)
     elif isinstance(obj, np.bool_):
         return bool(obj)
     elif isinstance(obj, (u.Unit, u.IrreducibleUnit, u.CompositeUnit)):
@@ -42,7 +55,12 @@ class PhoebeWorker:
         self.port = port
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
+        self.socket.setsockopt(zmq.LINGER, 0)
         self.socket.bind(f"tcp://127.0.0.1:{port}")
+
+        # Handle SIGTERM for graceful shutdown
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
 
         self.commands = {
             'ping': self.ping,
@@ -68,39 +86,54 @@ class PhoebeWorker:
 
         print(f"[phoebe_worker] Running on port {port}")
 
+    def _handle_signal(self, signum, frame):
+        """Handle termination signals for graceful shutdown."""
+        print(f"[phoebe_worker] Received signal {signum}, shutting down")
+        self.cleanup()
+        sys.exit(0)
+
+    def cleanup(self):
+        """Clean up ZMQ resources."""
+        try:
+            self.socket.close()
+            self.context.term()
+        except Exception:
+            pass
+
     def run(self):
         """Main worker loop."""
-        while True:
-            args = self.socket.recv_json()
-            if type(args) is not dict:
-                raise ValueError(f'API returned a non-dictionary value: {args}')
+        try:
+            while True:
+                args = self.socket.recv_json()
+                if type(args) is not dict:
+                    raise ValueError(f'API returned a non-dictionary value: {args}')
 
-            command = args.pop('command')
-            if command not in self.commands:
-                response = {
-                    'success': False,
-                    'error': f'API does not recognize command {command}.'
-                }
-                self.socket.send_json(response)
-                continue
+                command = args.pop('command')
+                if command not in self.commands:
+                    response = {
+                        'success': False,
+                        'error': f'API does not recognize command {command}.'
+                    }
+                    self.socket.send_json(response)
+                    continue
 
-            try:
-                # print(f'[phoebe_worker] Executing command: {command} with args: {args}')
-                result = self.commands[command](**args)
-                response = {
-                    'success': True,
-                    'result': make_json_serializable(result)
-                }
+                try:
+                    result = self.commands[command](**args)
+                    response = {
+                        'success': True,
+                        'result': make_json_serializable(result)
+                    }
+                    self.socket.send_json(response)
 
-                self.socket.send_json(response)
-
-            except Exception as e:
-                error_response = {
-                    'success': False,
-                    'error': str(e),
-                    'traceback': traceback.format_exc()
-                }
-                self.socket.send_json(error_response)
+                except Exception as e:
+                    error_response = {
+                        'success': False,
+                        'error': str(e),
+                        'traceback': traceback.format_exc()
+                    }
+                    self.socket.send_json(error_response)
+        finally:
+            self.cleanup()
 
     def ping(self):
         """Health check / readiness probe."""

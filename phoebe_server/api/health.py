@@ -6,13 +6,13 @@ router = APIRouter()
 
 
 @router.get("/health")
-async def health_check():
+def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
 
 
 @router.get("/")
-async def root():
+def root():
     """Root endpoint."""
     return {
         "service": "phoebe-server",

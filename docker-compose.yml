@@ -9,6 +9,8 @@ services:
     environment:
       - PHOEBE_ENABLE_ONLINE_PASSBANDS=FALSE
       - PHOEBE_PBDIR=/etc/phoebe/atmospheres/tables/passbands
+      # Set JWT secret for production (required for jwt/external auth modes):
+      # - PHOEBE_JWT_SECRET_KEY=<your-secret-here>
     ports:
       - "8001:80"
     volumes:

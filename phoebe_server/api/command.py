@@ -11,11 +11,7 @@ router = APIRouter()
 
 
 @router.post("/send/{session_id}")
-async def send(
-    session_id: str,
-    command: dict,
-    user: dict | None = Depends(get_current_user),
-):
+def send(session_id: str, command: dict, user: dict | None = Depends(get_current_user)):
     """Send a command to a PHOEBE session."""
     info = session_manager.get_server_info(session_id)
     if not info:

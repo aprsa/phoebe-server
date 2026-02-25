@@ -21,6 +21,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
+    # Validate JWT secret for secure auth modes
+    if config.auth.mode in ("jwt", "external"):
+        secret = config.auth.jwt_secret_key
+        if not secret or secret == "test":
+            logger.critical(
+                "jwt_secret_key is empty or set to 'test'. "
+                "Set a strong secret: export PHOEBE_JWT_SECRET_KEY=\"$(python -c "
+                "'import secrets; print(secrets.token_urlsafe(32))')\" "
+                "and update config.toml."
+            )
+            raise SystemExit(1)
+
     # Startup
     database.init_database()
     load_port_config()

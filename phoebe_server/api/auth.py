@@ -53,13 +53,13 @@ class UserResponse(BaseModel):
 # ---------
 
 @router.get("/config", response_model=AuthConfigResponse)
-async def auth_config():
+def auth_config():
     """Discovery endpoint: returns the server's auth mode. No auth required."""
     return {"mode": config.auth.mode}
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest):
+def register(req: RegisterRequest):
     """Register a new user (jwt mode only)."""
     if config.auth.mode != "jwt":
         raise HTTPException(
@@ -107,7 +107,7 @@ async def register(req: RegisterRequest):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+def login(req: LoginRequest):
     """Authenticate and get a JWT (jwt mode only)."""
     if config.auth.mode != "jwt":
         raise HTTPException(
@@ -148,7 +148,7 @@ async def login(req: LoginRequest):
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user=Depends(get_current_user)):
+def me(user=Depends(get_current_user)):
     """Get current user info from token (jwt/external modes)."""
     if user is None:
         raise HTTPException(

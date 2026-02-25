@@ -13,7 +13,7 @@ from .. import database
 logger = logging.getLogger(__name__)
 
 
-async def get_current_user(
+def get_current_user(
     authorization: str | None = Header(None),
 ) -> dict[str, Any] | None:
     """FastAPI dependency: extract and validate user identity from request.

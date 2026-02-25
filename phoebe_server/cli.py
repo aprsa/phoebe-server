@@ -30,6 +30,7 @@ def main():
             host=args.host,
             port=args.port,
             reload=args.reload,
+            workers=config.server.workers,
         )
     elif args.command == "init-db":
         from pathlib import Path
