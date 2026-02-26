@@ -16,6 +16,7 @@ Uses built-in defaults if config file is missing.
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import os
 import sys
 import tomllib
 
@@ -137,9 +138,15 @@ def load_config() -> Config:
     if "path" in db_data:
         db_data = {**db_data, "path": _resolve_db_path(db_data["path"])}
 
+    auth_data = data.get("auth", {})
+    # Allow overriding jwt_secret_key via environment variable
+    env_secret = os.environ.get("PHOEBE_JWT_SECRET_KEY")
+    if env_secret:
+        auth_data = {**auth_data, "jwt_secret_key": env_secret}
+
     return Config(
         server=ServerConfig(**get_args(ServerConfig, data.get("server", {}))),
-        auth=AuthConfig(**get_args(AuthConfig, data.get("auth", {}))),
+        auth=AuthConfig(**get_args(AuthConfig, auth_data)),
         port_pool=PortPoolConfig(**get_args(PortPoolConfig, data.get("port_pool", {}))),
         logging=LoggingConfig(**get_args(LoggingConfig, data.get("logging", {}))),
         session=SessionConfig(**get_args(SessionConfig, data.get("session", {}))),
