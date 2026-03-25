@@ -3,6 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Optional build-time PHOEBE source override.
+      # Set these in .env or shell before `docker compose build`.
+      # Example:
+      #   PHOEBE_GIT_REMOTE=https://github.com/aprsa/phoebe2
+      #   PHOEBE_GIT_BRANCH=dc-sb1-fix
+      args:
+        PHOEBE_GIT_REMOTE: ${PHOEBE_GIT_REMOTE:-}
+        PHOEBE_GIT_BRANCH: ${PHOEBE_GIT_BRANCH:-}
     image: phoebe-lab-server:latest
     container_name: phoebe-lab-server
     restart: unless-stopped

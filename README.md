@@ -48,6 +48,49 @@ phoebe-server init-db --force
 phoebe-server run --port 8001
 ```
 
+## Docker Build Overrides (PHOEBE Source)
+
+The server image can install PHOEBE from either:
+
+- PyPI (default)
+- a custom git remote + branch
+
+The Dockerfile uses build args:
+
+- `PHOEBE_GIT_REMOTE`
+- `PHOEBE_GIT_BRANCH`
+
+These are already wired through `docker-compose.yml` via environment-variable interpolation.
+
+### Use defaults (PyPI)
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+### Use a custom branch (via `.env`)
+
+Create a `.env` file next to `docker-compose.yml`:
+
+```bash
+PHOEBE_GIT_REMOTE=https://github.com/aprsa/phoebe2
+PHOEBE_GIT_BRANCH=dc-sb1-fix
+```
+
+Then rebuild:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Notes on rebuild behavior
+
+- Changing `PHOEBE_GIT_REMOTE` or `PHOEBE_GIT_BRANCH` invalidates the build cache for the PHOEBE install layer.
+- If branch name is unchanged but branch HEAD moved, Docker may reuse cache unless you force rebuild (`--no-cache`) or change the branch/ref value.
+- For fully reproducible builds, prefer pinning a commit SHA (as branch/ref value) and updating that value explicitly.
+
 ### Configuration
 
 Create a `config.toml`:
