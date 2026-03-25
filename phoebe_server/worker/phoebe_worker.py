@@ -189,12 +189,12 @@ class PhoebeWorker:
         return {}
 
     def remove_dataset(self, dataset, **kwargs):
-        self.bundle.remove_dataset(dataset)
-
-        # PHOEBE's remove_dataset doesn't remove params in custom 'ui' context,
+        # PHOEBE's remove_dataset doesn't remove params in the custom 'ui' context,
         # so we need to manually remove them
-        for ui_param in self.bundle.filter(dataset=dataset, context='ui'):
-            self.bundle.remove_parameter(ui_param)
+        for qualifier in self.bundle.filter(dataset=dataset, context='ui'):
+            self.bundle.remove_parameter(qualifier=qualifier, dataset=dataset, context='ui')
+
+        self.bundle.remove_dataset(dataset)
 
         return {}
 
